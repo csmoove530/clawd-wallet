@@ -6,12 +6,12 @@ import { ethers } from 'ethers';
 import { Keychain } from './keychain.js';
 
 export class WalletManager {
-  private wallet: ethers.Wallet | null = null;
+  private wallet: ethers.HDNodeWallet | ethers.Wallet | null = null;
 
   /**
    * Generate a new wallet
    */
-  generateWallet(): ethers.Wallet {
+  generateWallet(): ethers.HDNodeWallet {
     this.wallet = ethers.Wallet.createRandom();
     return this.wallet;
   }
@@ -51,7 +51,7 @@ export class WalletManager {
   /**
    * Get current wallet instance
    */
-  getWallet(): ethers.Wallet {
+  getWallet(): ethers.HDNodeWallet | ethers.Wallet {
     if (!this.wallet) {
       throw new Error('No wallet loaded. Load wallet first.');
     }

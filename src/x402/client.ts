@@ -79,7 +79,7 @@ export class X402Client {
    * Generate payment proof signature
    */
   static async generatePaymentProof(
-    wallet: ethers.Wallet,
+    wallet: ethers.HDNodeWallet | ethers.Wallet,
     payment: PaymentDetails
   ): Promise<string> {
     // Create message to sign

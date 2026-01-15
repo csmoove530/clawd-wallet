@@ -5,7 +5,8 @@
 import chalk from 'chalk';
 import { ConfigManager } from '../../config/manager.js';
 import { AuditLogger } from '../../security/audit.js';
-import { formatError, formatSuccess, validatePositiveNumber } from '../utils/formatters.js';
+import { formatError, formatSuccess } from '../utils/formatters.js';
+import { validatePositiveNumber } from '../utils/validators.js';
 
 export async function configCommand(action: string, key?: string, value?: string): Promise<void> {
   try {

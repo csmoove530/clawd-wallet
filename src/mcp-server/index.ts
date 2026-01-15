@@ -151,7 +151,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(await MCPTools.transactionHistory(args.limit), null, 2)
+              text: JSON.stringify(await MCPTools.transactionHistory(args?.limit as number), null, 2)
             }
           ]
         };
@@ -161,7 +161,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           content: [
             {
               type: 'text',
-              text: JSON.stringify(await MCPTools.discoverServices(args.category, args.query), null, 2)
+              text: JSON.stringify(await MCPTools.discoverServices(args?.category as string, args?.query as string), null, 2)
             }
           ]
         };
