@@ -31,3 +31,12 @@ coverage/
 
 # User data (sensitive)
 .clawd/
+
+# Test files with personal wallet addresses
+test-*.js
+*-test.js
+check-*.js
+setup-*.js
+show-*.js
+create-*.js
+audit-report.json
