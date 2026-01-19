@@ -78,6 +78,48 @@ export interface X402Service {
   category: string;
 }
 
+/**
+ * x402 Protocol v1 types
+ */
+export interface X402PaymentOption {
+  scheme: 'exact' | string;
+  network: 'base' | 'base-sepolia' | string;
+  maxAmountRequired: string;
+  resource: string;
+  description?: string;
+  mimeType?: string;
+  payTo: string;
+  maxTimeoutSeconds?: number;
+  asset: string;
+  extra?: {
+    name?: string;
+    version?: string;
+  };
+}
+
+export interface X402Response {
+  x402Version: number;
+  error?: string;
+  accepts: X402PaymentOption[];
+}
+
+export interface X402PaymentPayload {
+  x402Version: number;
+  scheme: string;
+  network: string;
+  payload: {
+    signature: string;
+    authorization: {
+      from: string;
+      to: string;
+      value: string;
+      validAfter: string;
+      validBefore: string;
+      nonce: string;
+    };
+  };
+}
+
 export interface BalanceInfo {
   address: string;
   balance: string;

@@ -13,6 +13,7 @@ export type AuditAction =
   | 'payment_approved'
   | 'payment_executed'
   | 'payment_failed'
+  | 'payment_error'
   | 'config_changed'
   | 'wallet_created'
   | 'wallet_exported'

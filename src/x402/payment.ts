@@ -1,5 +1,5 @@
 /**
- * x402 payment execution handler
+ * x402 payment execution handler (v1 protocol)
  */
 
 import { ethers } from 'ethers';
@@ -10,7 +10,15 @@ import { TransactionHistory } from '../wallet/history.js';
 import { SpendLimits } from '../security/limits.js';
 import { AuditLogger } from '../security/audit.js';
 import { ConfigManager } from '../config/manager.js';
-import type { PaymentDetails, Transaction } from '../types/index.js';
+import type { Transaction, X402PaymentOption } from '../types/index.js';
+
+export interface PaymentResult {
+  success: boolean;
+  response?: any;
+  error?: string;
+  amountPaid?: number;
+  service?: string;
+}
 
 export class PaymentHandler {
   private walletManager: WalletManager;
@@ -33,45 +41,54 @@ export class PaymentHandler {
   }
 
   /**
-   * Execute full x402 payment flow
+   * Execute full x402 payment flow (v1 protocol)
    */
   async executePayment(
     url: string,
     method: string = 'GET',
     body?: string,
     description?: string
-  ): Promise<{ success: boolean; response?: any; error?: string }> {
+  ): Promise<PaymentResult> {
     try {
       // Step 1: Make initial request
       const initialResponse = await X402Client.makeRequest(url, { method, body });
 
       // Step 2: Check if payment is required
       if (initialResponse.status !== 402) {
+        // No payment required, return response directly
         return {
           success: true,
           response: initialResponse.body ? JSON.parse(initialResponse.body) : null
         };
       }
 
-      // Step 3: Parse payment details
-      const wwwAuth = initialResponse.headers['www-authenticate'];
-      if (!wwwAuth) {
+      // Step 3: Parse x402 v1 payment details from response body
+      if (!initialResponse.body) {
         return {
           success: false,
           error: 'Payment required but no payment details provided'
         };
       }
 
-      const paymentInfo = X402Client.parsePaymentHeaders(wwwAuth);
-      if (!paymentInfo) {
+      const x402Response = X402Client.parseX402Response(initialResponse.body);
+      if (!x402Response || !x402Response.accepts || x402Response.accepts.length === 0) {
         return {
           success: false,
-          error: 'Invalid payment details in response'
+          error: 'Invalid x402 response format'
         };
       }
 
-      // Step 4: Validate amount
-      const amount = parseFloat(paymentInfo.amount);
+      // Step 4: Select payment option
+      const paymentOption = X402Client.selectPaymentOption(x402Response.accepts);
+      if (!paymentOption) {
+        return {
+          success: false,
+          error: 'No compatible payment option found'
+        };
+      }
+
+      // Step 5: Parse and validate amount
+      const amount = X402Client.parseAmount(paymentOption.maxAmountRequired);
       const validation = await this.validateAmount(amount);
       if (!validation.valid) {
         return {
@@ -80,35 +97,28 @@ export class PaymentHandler {
         };
       }
 
-      // Step 5: Check balance
+      // Step 6: Check balance
       const hasBalance = await this.checkBalance(amount);
       if (!hasBalance) {
         return {
           success: false,
-          error: 'Insufficient balance'
+          error: `Insufficient balance. Required: $${amount.toFixed(2)} USDC`
         };
       }
 
-      // Step 6: Create payment details
-      const paymentDetails: PaymentDetails = {
-        recipient: paymentInfo.recipient,
-        amount,
-        currency: paymentInfo.currency,
-        description: description || paymentInfo.description || 'x402 payment',
-        nonce: paymentInfo.nonce
-      };
-
-      // Step 7: Generate payment proof
+      // Step 7: Generate payment authorization
       const wallet = this.walletManager.getWallet();
-      const signature = await X402Client.generatePaymentProof(wallet, paymentDetails);
+      const { authorization, signature } = await X402Client.generatePaymentAuthorization(
+        wallet,
+        paymentOption.payTo,
+        paymentOption.maxAmountRequired,
+        paymentOption.asset
+      );
 
-      // Step 8: Create authorization header
-      const authHeader = X402Client.createAuthorizationHeader(
-        wallet.address,
-        paymentDetails.recipient,
-        paymentInfo.amount,
-        paymentDetails.currency,
-        paymentDetails.nonce,
+      // Step 8: Create X-PAYMENT header
+      const xPaymentHeader = X402Client.createXPaymentHeader(
+        paymentOption,
+        authorization,
         signature
       );
 
@@ -117,19 +127,22 @@ export class PaymentHandler {
         method,
         body,
         headers: {
-          'Authorization': authHeader
+          'X-PAYMENT': xPaymentHeader
         }
       });
 
-      // Step 10: Log transaction
-      if (paymentResponse.status === 200) {
+      // Step 10: Handle response
+      const serviceName = new URL(url).hostname;
+
+      if (paymentResponse.status >= 200 && paymentResponse.status < 300) {
+        // Payment successful
         const transaction: Transaction = {
           id: ethers.hexlify(ethers.randomBytes(16)),
           timestamp: Date.now(),
-          service: new URL(url).hostname,
-          description: paymentDetails.description,
+          service: serviceName,
+          description: description || paymentOption.description || 'x402 payment',
           amount,
-          currency: paymentDetails.currency,
+          currency: 'USDC',
           status: 'success'
         };
 
@@ -137,12 +150,24 @@ export class PaymentHandler {
         await AuditLogger.logAction('payment_executed', {
           url,
           amount,
-          service: transaction.service
+          service: serviceName,
+          payTo: paymentOption.payTo
         });
+
+        let responseData = null;
+        if (paymentResponse.body) {
+          try {
+            responseData = JSON.parse(paymentResponse.body);
+          } catch {
+            responseData = paymentResponse.body;
+          }
+        }
 
         return {
           success: true,
-          response: paymentResponse.body ? JSON.parse(paymentResponse.body) : null
+          response: responseData,
+          amountPaid: amount,
+          service: serviceName
         };
       }
 
@@ -150,15 +175,36 @@ export class PaymentHandler {
       await AuditLogger.logAction('payment_failed', {
         url,
         amount,
-        status: paymentResponse.status
+        status: paymentResponse.status,
+        response: paymentResponse.body
       });
+
+      // Try to parse error message
+      let errorMsg = `Payment failed with status ${paymentResponse.status}`;
+      if (paymentResponse.body) {
+        try {
+          const errorBody = JSON.parse(paymentResponse.body);
+          if (errorBody.error) {
+            errorMsg = errorBody.error;
+          } else if (errorBody.message) {
+            errorMsg = errorBody.message;
+          }
+        } catch {
+          // Use default error message
+        }
+      }
 
       return {
         success: false,
-        error: `Payment failed with status ${paymentResponse.status}`
+        error: errorMsg
       };
 
     } catch (error) {
+      await AuditLogger.logAction('payment_error', {
+        url,
+        error: (error as Error).message
+      });
+
       return {
         success: false,
         error: (error as Error).message
