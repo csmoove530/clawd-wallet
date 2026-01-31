@@ -17,7 +17,10 @@ export type AuditAction =
   | 'config_changed'
   | 'wallet_created'
   | 'wallet_exported'
-  | 'limit_exceeded';
+  | 'limit_exceeded'
+  | 'tap_verified'
+  | 'tap_headers_included'
+  | 'tap_headers_skipped';
 
 export interface AuditEntry {
   timestamp: string;

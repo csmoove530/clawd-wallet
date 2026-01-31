@@ -15,6 +15,8 @@ import { discoverCommand } from './commands/discover.js';
 import { installCommand } from './commands/install.js';
 import { uninstallCommand } from './commands/uninstall.js';
 import { exportKeyCommand } from './commands/export-key.js';
+import { verifyCommand } from './commands/verify.js';
+import { tapStatusCommand } from './commands/tap-status.js';
 
 const program = new Command();
 
@@ -101,6 +103,29 @@ program
   .description('Export private key (dangerous!)')
   .action(async () => {
     await exportKeyCommand();
+  });
+
+// Verify command - TAP identity verification
+program
+  .command('verify')
+  .description('Verify your identity with TAP (Trusted Agent Protocol)')
+  .option('-l, --level <level>', 'Identity level: email, kyc, or kyb', 'kyc')
+  .option('-n, --name <name>', 'Custom agent name')
+  .option('--demo', 'Use demo verification (no browser OAuth)')
+  .action(async (options) => {
+    await verifyCommand(options);
+  });
+
+// TAP subcommands
+const tapCommand = program
+  .command('tap')
+  .description('TAP (Trusted Agent Protocol) management');
+
+tapCommand
+  .command('status')
+  .description('Show TAP verification status and reputation')
+  .action(async () => {
+    await tapStatusCommand();
   });
 
 // Error handling

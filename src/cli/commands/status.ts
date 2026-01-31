@@ -8,6 +8,7 @@ import { WalletManager } from '../../wallet/manager.js';
 import { BalanceChecker } from '../../wallet/balance.js';
 import { ConfigManager } from '../../config/manager.js';
 import { TransactionHistory } from '../../wallet/history.js';
+import { TAPCredentialManager } from '../../tap/index.js';
 import { formatCurrency, formatAddress, formatError, formatTimestamp, formatStatus } from '../utils/formatters.js';
 
 export async function statusCommand(): Promise<void> {
@@ -54,6 +55,30 @@ export async function statusCommand(): Promise<void> {
       });
     } else {
       console.log('\n' + chalk.gray('No transactions yet'));
+    }
+
+    // TAP Identity Status
+    console.log('\n' + chalk.bold('Identity (TAP):'));
+    try {
+      const tapStatus = await TAPCredentialManager.getStatus();
+
+      if (tapStatus.verified) {
+        console.log(`  Status: ${chalk.green('Verified ✓')}`);
+        console.log(`  Level: ${chalk.cyan(tapStatus.identityLevel?.toUpperCase())}`);
+        if (tapStatus.attestationExpires) {
+          const expiresAt = new Date(tapStatus.attestationExpires);
+          const daysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          console.log(`  Expires: ${chalk.gray(`${daysLeft} days`)}`);
+        }
+      } else if (tapStatus.agentId) {
+        console.log(`  Status: ${chalk.yellow('Pending verification')}`);
+        console.log(`  ${chalk.gray('Run "clawd verify" to complete')}`);
+      } else {
+        console.log(`  Status: ${chalk.gray('Not verified')}`);
+        console.log(`  ${chalk.gray('Run "clawd verify" for premium access')}`);
+      }
+    } catch {
+      console.log(`  Status: ${chalk.gray('Not configured')}`);
     }
 
     console.log('\n' + chalk.bold('MCP Server:'));

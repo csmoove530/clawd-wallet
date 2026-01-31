@@ -62,6 +62,33 @@ export async function initCommand(): Promise<void> {
     console.log('\n' + chalk.gray('Network: Base Mainnet'));
     console.log(chalk.gray('Token: USDC (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)'));
 
+    // Ask about TAP identity verification
+    console.log('\n' + chalk.bold('🆔 Identity Verification (Recommended)'));
+    console.log(chalk.gray('Verified wallets can access premium data sources and build'));
+    console.log(chalk.gray('reputation with merchants using Visa\'s Trusted Agent Protocol.\n'));
+
+    const { setupTAP } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'setupTAP',
+        message: 'Would you like to verify your identity now?',
+        choices: [
+          { name: 'Yes - Verify now (recommended)', value: 'yes' },
+          { name: 'Later - I\'ll run "clawd verify" when ready', value: 'later' },
+          { name: 'No - Skip identity verification', value: 'no' }
+        ],
+        default: 'yes'
+      }
+    ]);
+
+    if (setupTAP === 'yes') {
+      // Import and run verify command
+      const { verifyCommand } = await import('./verify.js');
+      await verifyCommand({ demo: process.env.CLAWD_TAP_DEMO === 'true' });
+    } else if (setupTAP === 'later') {
+      console.log(formatInfo('\nRun "clawd verify" when you\'re ready to verify your identity.'));
+    }
+
     // Ask about Claude Code integration
     const { setupMCP } = await inquirer.prompt([
       {

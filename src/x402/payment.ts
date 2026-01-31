@@ -10,6 +10,7 @@ import { TransactionHistory } from '../wallet/history.js';
 import { SpendLimits } from '../security/limits.js';
 import { AuditLogger } from '../security/audit.js';
 import { ConfigManager } from '../config/manager.js';
+import { TAPSigner, TAPCredentialManager } from '../tap/index.js';
 import type { Transaction, X402PaymentOption } from '../types/index.js';
 
 export interface PaymentResult {
@@ -122,13 +123,39 @@ export class PaymentHandler {
         signature
       );
 
-      // Step 9: Retry request with payment proof
+      // Step 9: Build headers with TAP if available
+      const headers: Record<string, string> = {
+        'X-PAYMENT': xPaymentHeader
+      };
+
+      // Add TAP headers if identity is verified
+      try {
+        const tapHeaders = await TAPSigner.buildHeaders({
+          method,
+          url,
+          payment: xPaymentHeader
+        });
+
+        if (tapHeaders) {
+          Object.assign(headers, tapHeaders);
+          await AuditLogger.logAction('tap_headers_included', {
+            url,
+            hasAttestation: true
+          });
+        }
+      } catch (tapError) {
+        // TAP signing failed, continue without TAP headers
+        await AuditLogger.logAction('tap_headers_skipped', {
+          url,
+          reason: (tapError as Error).message
+        });
+      }
+
+      // Step 10: Retry request with payment proof (and TAP headers if available)
       const paymentResponse = await X402Client.makeRequest(url, {
         method,
         body,
-        headers: {
-          'X-PAYMENT': xPaymentHeader
-        }
+        headers
       });
 
       // Step 10: Handle response

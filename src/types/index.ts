@@ -126,3 +126,8 @@ export interface BalanceInfo {
   decimals: number;
   symbol: string;
 }
+
+/**
+ * TAP (Trusted Agent Protocol) types
+ */
+export type { TAPCredentials, TAPIdentityLevel, TAPStatus, TAPHeaders } from '../tap/types.js';
