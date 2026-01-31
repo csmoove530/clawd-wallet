@@ -44,6 +44,7 @@ CLAWD Wallet is an MCP (Model Context Protocol) server that enables AI assistant
 ✅ Transaction history and audit logging
 ✅ Service discovery for x402-enabled APIs
 ✅ Terminal-native approval flow
+✅ **TAP (Trusted Agent Protocol)** - Verified identity for premium merchant access
 
 ## Installation
 
@@ -120,12 +121,45 @@ Next steps:
   2. Try: "Check my CLAWD wallet balance"
 ```
 
-### 5. Use with Claude
+### 5. Verify Your Identity (Optional)
+
+Get verified for premium merchant access:
+
+```bash
+$ clawd verify
+
+🆔 TAP Identity Verification
+
+Wallet: 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb
+Network: base-mainnet
+
+? Select identity verification level:
+  ❯ KYC - Full verification (recommended for most merchants)
+    Email - Email verification only (basic access)
+    KYB - Business verification (for enterprises)
+
+✓ Registered with TAP registry
+  Agent ID: agent_abc123...
+  Key ID: key_xyz789...
+
+✓ Identity verified at KYC level
+
+Your verified wallet:
+  Agent ID:      agent_abc123def456
+  Identity:      KYC (verified)
+  Reputation:    50.0 (new user)
+  Expires:       2026-01-31
+
+✓ Premium merchants will now accept your payments!
+```
+
+### 6. Use with Claude
 
 In Claude Code, try:
 - "Check my CLAWD wallet balance"
 - "What x402 services are available?"
 - "Make a payment to [service URL]"
+- "Verify my identity for premium merchants"
 
 ## CLI Commands
 
@@ -178,6 +212,42 @@ Remove Claude Code integration.
 ### `clawd export-key`
 Export private key (dangerous operation, requires confirmation).
 
+### `clawd verify [options]`
+Verify your identity with TAP (Trusted Agent Protocol) for premium merchant access.
+
+**Options:**
+- `-l, --level <level>`: Identity level - `email`, `kyc`, or `kyb` (default: kyc)
+- `-n, --name <name>`: Custom agent name
+- `--demo`: Use demo verification (no browser OAuth)
+
+**Example:**
+```bash
+# Full KYC verification (recommended)
+clawd verify
+
+# Email-only verification
+clawd verify --level email
+
+# Business verification
+clawd verify --level kyb --name "Acme Corp Bot"
+```
+
+### `clawd tap status`
+Show your TAP verification status and reputation score.
+
+```bash
+$ clawd tap status
+
+🆔 TAP Status
+
+Status:      ✓ Verified
+Agent ID:    agent_abc123def456
+Identity:    KYC
+Reputation:  72.5
+Expires:     2026-01-31
+Registry:    https://tap-registry.visa.com/v1
+```
+
 ## MCP Server Tools
 
 When integrated with Claude Code, Claude can use these tools:
@@ -211,6 +281,40 @@ Discover available x402 services.
 - `category`: Filter by category
 - `query`: Search query
 
+### `x402_verify_identity`
+Start TAP identity verification for premium merchant access.
+
+**Parameters:**
+- `level`: Identity level - `email`, `kyc`, or `kyb` (default: kyc)
+- `name`: Custom agent name (optional)
+
+**Example response:**
+```json
+{
+  "success": true,
+  "status": "verified",
+  "agentId": "agent_abc123def456",
+  "identityLevel": "kyc",
+  "reputationScore": 50.0,
+  "message": "Identity verified at KYC level. Premium merchants will now accept your payments."
+}
+```
+
+### `x402_get_tap_status`
+Get current TAP verification status and reputation.
+
+**Example response:**
+```json
+{
+  "success": true,
+  "verified": true,
+  "agentId": "agent_abc123def456",
+  "identityLevel": "kyc",
+  "reputationScore": 72.5,
+  "attestationExpires": "2026-01-31T00:00:00Z"
+}
+```
+
 ## Security
 
 CLAWD Wallet is designed with security in mind:
@@ -243,6 +347,128 @@ Security settings in `~/.clawd/config.json`:
 }
 ```
 
+## Verified Identity with TAP
+
+### The Problem
+
+AI agents making payments face a trust problem:
+
+- **Merchants can't distinguish** between legitimate AI assistants and malicious bots
+- **No accountability** - anonymous wallets can spam or abuse services
+- **Premium services locked** - high-value APIs require identity verification
+- **No reputation system** - good agents can't build trust over time
+
+### The Solution: TAP (Trusted Agent Protocol)
+
+TAP extends Visa's Trusted Agent Protocol to wallet-based identity, enabling:
+
+```
+┌─────────────────┐      ┌─────────────────┐      ┌─────────────────┐
+│  AI Agent       │      │  TAP Registry   │      │  Merchant       │
+│  (CLAWD Wallet) │      │  (Visa)         │      │  (x402 Server)  │
+└────────┬────────┘      └────────┬────────┘      └────────┬────────┘
+         │                        │                        │
+         │ 1. Register wallet     │                        │
+         │───────────────────────>│                        │
+         │                        │                        │
+         │ 2. Verify identity     │                        │
+         │   (email/KYC/KYB)      │                        │
+         │───────────────────────>│                        │
+         │                        │                        │
+         │ 3. Receive attestation │                        │
+         │<───────────────────────│                        │
+         │   (signed JWT)         │                        │
+         │                        │                        │
+         │ 4. Payment request with TAP headers             │
+         │─────────────────────────────────────────────────>
+         │   X-PAYMENT: ...                                │
+         │   X-TAP-ATTESTATION: eyJ...                     │
+         │   X-TAP-SIGNATURE: ...                          │
+         │                        │                        │
+         │                        │ 5. Verify attestation  │
+         │                        │<───────────────────────│
+         │                        │                        │
+         │                        │ 6. Return identity     │
+         │                        │───────────────────────>│
+         │                        │   level + reputation   │
+         │                        │                        │
+         │ 7. Payment accepted                             │
+         │<─────────────────────────────────────────────────
+```
+
+### Identity Levels
+
+| Level | Verification | Use Case |
+|-------|--------------|----------|
+| `anonymous` | Wallet signature only | Basic x402 services |
+| `email` | Email verification | Most APIs |
+| `kyc` | Full KYC (recommended) | Premium services, higher limits |
+| `kyb` | Business verification | Enterprise APIs |
+
+### Quick Start
+
+```bash
+# Verify your identity (one-time setup)
+clawd verify --level kyc
+
+# Check your TAP status anytime
+clawd tap status
+```
+
+That's it. Once verified, TAP headers are **automatically included** in all x402 payments.
+
+### How TAP Headers Work
+
+When you make a payment, CLAWD automatically adds:
+
+```http
+POST /api/premium-data HTTP/1.1
+X-PAYMENT: eyJzY2hlbWUiOiJleGFjdCIsIm5ldHdvcmsiOiJiYXNlIi4uLn0=
+X-TAP-ATTESTATION: eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9...
+X-TAP-SIGNATURE: sig1=:MEUCIQDx...
+X-TAP-KEY-ID: key_abc123
+```
+
+Merchants verify these headers to:
+- Confirm your identity level meets their requirements
+- Check your reputation score
+- Decide whether to accept the payment
+
+### Reputation System
+
+Your reputation score (0-100) is based on:
+
+| Factor | Impact |
+|--------|--------|
+| Successful transactions | +0.1 per transaction |
+| Unique merchants | +0.5 per new merchant |
+| Transaction volume | Logarithmic bonus |
+| Disputes | -10.0 per dispute |
+| Chargebacks | -25.0 per chargeback |
+
+New users start at **50.0** (neutral). Premium merchants may require scores above 60 or 70.
+
+### Benefits for Developers
+
+**Without TAP:**
+```
+Payment rejected: Merchant requires identity verification
+```
+
+**With TAP:**
+```
+✓ Payment accepted ($0.05 USDC)
+✓ Identity: KYC verified
+✓ Reputation: 72.5
+```
+
+### Privacy Considerations
+
+- TAP attestations contain **identity level**, not personal data
+- Merchants see "KYC verified" but not your name/email
+- You control which services receive your attestation
+- Attestations expire (default: 1 year) and can be revoked
+
 ## Architecture
 
 ```
@@ -270,19 +496,28 @@ Security settings in `~/.clawd/config.json`:
 │  │ • Balance checking       │  │
 │  └──────────────────────────┘  │
 │  ┌──────────────────────────┐  │
+│  │ TAP Identity             │  │
+│  │ • Agent registration     │  │
+│  │ • Attestation signing    │  │
+│  │ • Reputation tracking    │  │
+│  └──────────────────────────┘  │
+│  ┌──────────────────────────┐  │
 │  │ Security & Limits        │  │
 │  │ • Spend validation       │  │
 │  │ • Audit logging          │  │
 │  └──────────────────────────┘  │
 └─────────────────────────────────┘
          │
-         ▼
-┌─────────────────────────────────┐
-│  macOS Keychain                 │
-│  (Private Key Storage)          │
-└─────────────────────────────────┘
-         │
-         ▼
+    ┌────┴────┐
+    │         │
+    ▼         ▼
+┌─────────┐ ┌─────────────────────┐
+│ macOS   │ │ TAP Registry (Visa) │
+│ Keychain│ │ • Identity verify   │
+│         │ │ • Reputation store  │
+└─────────┘ └─────────────────────┘
+    │
+    ▼
 ┌─────────────────────────────────┐
 │  Base Network                   │
 │  (USDC Payments)                │
@@ -304,6 +539,8 @@ Security settings in `~/.clawd/config.json`:
 ## File Locations
 
 - **Wallet keys**: OS Keychain (macOS Keychain, Windows Credential Manager, etc.)
+- **TAP signing key**: OS Keychain (separate from wallet key)
+- **TAP credentials**: `~/.clawd/tap/agent.json`, `~/.clawd/tap/attestation.json`
 - **Configuration**: `~/.clawd/config.json`
 - **Transaction history**: `~/.clawd/history.json`
 - **Audit log**: `~/.clawd/audit.log`
@@ -356,7 +593,11 @@ All available environment variables:
 
 ```bash
 # Registry configuration
-X402_REGISTRY_URL=https://api.x402scan.com  # Default registry
+X402_REGISTRY_URL=https://api.x402scan.com  # Default x402 service registry
+
+# TAP configuration
+CLAWD_TAP_REGISTRY=https://tap-registry.visa.com/v1  # TAP Registry URL
+CLAWD_TAP_DEMO=true                                   # Enable demo verification mode
 
 # Wallet configuration
 CLAWD_CONFIG_DIR=~/.clawd                   # Config directory
@@ -432,6 +673,12 @@ clawd-wallet/
 │   ├── types/          # TypeScript type definitions
 │   ├── wallet/         # Wallet management
 │   ├── x402/           # x402 protocol client
+│   ├── tap/            # TAP (Trusted Agent Protocol)
+│   │   ├── credentials.ts  # Credential storage
+│   │   ├── keychain.ts     # Ed25519 key management
+│   │   ├── registry.ts     # TAP Registry API client
+│   │   ├── signing.ts      # RFC 9421 signatures
+│   │   └── types.ts        # TAP type definitions
 │   ├── mcp-server/     # MCP server implementation
 │   ├── cli/            # CLI commands
 │   ├── config/         # Configuration management
@@ -465,6 +712,7 @@ Apache License 2.0 - see [LICENSE](LICENSE) for details.
 
 ## Roadmap
 
+- [x] **TAP (Trusted Agent Protocol)** - Verified identity for premium merchants
 - [ ] Multi-chain support (Solana, other EVMs)
 - [ ] Hardware wallet integration
 - [ ] Advanced approval rules (domain whitelists, time-based limits)
@@ -472,6 +720,8 @@ Apache License 2.0 - see [LICENSE](LICENSE) for details.
 - [ ] Gas optimization
 - [ ] Web dashboard (optional)
 - [ ] Native Anthropic integration
+- [ ] TAP reputation analytics dashboard
+- [ ] Multi-agent TAP delegation (allow sub-agents to use parent identity)
 
 ---
 
