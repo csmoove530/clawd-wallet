@@ -103,6 +103,13 @@ export class BalanceChecker {
       // Connect the wallet to the provider
       const connectedWallet = wallet.connect(this.provider);
 
+      // Check ETH balance for gas fees
+      const ethBalance = await this.provider.getBalance(wallet.address);
+      const minGasRequired = ethers.parseEther('0.0001'); // ~0.0001 ETH minimum for gas
+      if (ethBalance < minGasRequired) {
+        throw new Error('Insufficient ETH for gas fees. Please add ETH to your wallet.');
+      }
+
       // Get decimals (USDC uses 6)
       const decimals = await this.usdcContract.decimals();
 
@@ -115,15 +122,25 @@ export class BalanceChecker {
       // Execute transfer (use checksummed address)
       const tx = await contractWithSigner.transfer(checksummedRecipient, amountInUnits);
 
-      // Wait for confirmation
-      const receipt = await tx.wait();
+      // Wait for confirmations (2 for amounts > $100, 1 otherwise)
+      const confirmations = amount > 100 ? 2 : 1;
+      const receipt = await tx.wait(confirmations);
 
       return {
         txHash: receipt.hash,
         amount: amount.toString()
       };
     } catch (error) {
-      throw new Error(`USDC transfer failed: ${(error as Error).message}`);
+      // Sanitize error message - don't expose internal details
+      const msg = (error as Error).message;
+      if (msg.includes('insufficient funds')) {
+        throw new Error('Insufficient funds for transfer');
+      } else if (msg.includes('gas')) {
+        throw new Error('Transaction failed due to gas issues. Please try again.');
+      } else if (msg.includes('nonce')) {
+        throw new Error('Transaction conflict. Please wait and try again.');
+      }
+      throw new Error('USDC transfer failed. Please check your balance and try again.');
     }
   }
 }

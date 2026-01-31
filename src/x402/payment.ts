@@ -102,7 +102,37 @@ export class PaymentHandler {
       const wallet = this.walletManager.getWallet();
       const signature = await X402Client.generatePaymentProof(wallet, paymentDetails);
 
-      // Step 8: Execute on-chain USDC transfer
+      // Step 8: Pre-flight check - verify server will accept payment before transferring
+      // Send signature without tx_hash to confirm server is ready to accept
+      const preflightAuthHeader = X402Client.createAuthorizationHeader(
+        wallet.address,
+        paymentDetails.recipient,
+        paymentInfo.amount,
+        paymentDetails.currency,
+        paymentDetails.nonce,
+        signature
+        // No tx_hash yet - this is just a pre-flight check
+      );
+
+      const preflightResponse = await X402Client.makeRequest(url, {
+        method,
+        body,
+        headers: {
+          'Authorization': preflightAuthHeader,
+          'X-Payment-Preflight': 'true'  // Indicate this is a pre-flight check
+        }
+      });
+
+      // If server rejects the pre-flight (4xx/5xx errors other than 402), abort before transfer
+      if (preflightResponse.status >= 400 && preflightResponse.status !== 402) {
+        // Server rejected our payment intent - don't transfer USDC
+        return {
+          success: false,
+          error: `Server rejected payment intent (status ${preflightResponse.status}). No funds transferred.`
+        };
+      }
+
+      // Step 9: Execute onchain USDC transfer (only after pre-flight succeeds)
       if (!this.balanceChecker) {
         throw new Error('Payment handler not initialized');
       }
@@ -113,7 +143,7 @@ export class PaymentHandler {
         amount
       );
 
-      // Step 9: Create authorization header with tx_hash
+      // Step 10: Create authorization header with tx_hash
       const authHeader = X402Client.createAuthorizationHeader(
         wallet.address,
         paymentDetails.recipient,
@@ -121,10 +151,10 @@ export class PaymentHandler {
         paymentDetails.currency,
         paymentDetails.nonce,
         signature,
-        transferResult.txHash  // Include tx_hash for on-chain verification
+        transferResult.txHash  // Include tx_hash for onchain verification
       );
 
-      // Step 10: Retry request with payment proof and tx_hash
+      // Step 11: Retry request with payment proof and tx_hash
       const paymentResponse = await X402Client.makeRequest(url, {
         method,
         body,
@@ -133,7 +163,7 @@ export class PaymentHandler {
         }
       });
 
-      // Step 11: Log transaction
+      // Step 12: Log transaction
       if (paymentResponse.status === 200) {
         const transaction: Transaction = {
           id: transferResult.txHash,  // Use actual tx_hash as ID
